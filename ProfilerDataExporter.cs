@@ -113,6 +113,7 @@ namespace ProfilerDataExporter
 
             DrawStats();
             DrawFilePath();
+            DrawFrameRangeSelector();
             DrawExportButtons();
 
             EditorGUILayout.EndScrollView();
@@ -197,18 +198,29 @@ namespace ProfilerDataExporter
             {
                 ExportProfilerData();
             }
+
             var currentframe = (int)currentFrameFieldInfo.GetValue(profilerWindow);
             GUI.enabled = currentframe > 0;
             if (GUILayout.Button("Current Frame Data"))
             {
                 ExportCurrentFrameData(currentframe);
             }
-            GUI.enabled = true;
+
             GUI.enabled = !string.IsNullOrEmpty(ProfilerDriver.selectedPropertyPath);
             if (GUILayout.Button("Selected Function Data"))
             {
                 ExportSelectedFunctionData();
             }
+
+            // 添加帧范围导出按钮
+            GUI.enabled = useCustomFrameRange &&
+                         selectedStartFrame >= 0 &&
+                         selectedEndFrame >= selectedStartFrame;
+            if (GUILayout.Button("Range Frame Data"))
+            {
+                ExtractData(selectedStartFrame, selectedEndFrame);
+            }
+
             GUI.enabled = true;
             GUILayout.EndHorizontal();
         }
@@ -241,8 +253,19 @@ namespace ProfilerDataExporter
 
         private void ExportProfilerData()
         {
-            var firstFrameIndex = ProfilerDriver.firstFrameIndex;
-            var lastFrameIndex = ProfilerDriver.lastFrameIndex;
+            int firstFrameIndex, lastFrameIndex;
+
+            if (useCustomFrameRange && selectedStartFrame >= 0 && selectedEndFrame >= selectedStartFrame)
+            {
+                firstFrameIndex = selectedStartFrame;
+                lastFrameIndex = selectedEndFrame;
+            }
+            else
+            {
+                firstFrameIndex = ProfilerDriver.firstFrameIndex;
+                lastFrameIndex = ProfilerDriver.lastFrameIndex;
+            }
+
             ExtractData(firstFrameIndex, lastFrameIndex);
         }
 
@@ -266,6 +289,45 @@ namespace ProfilerDataExporter
             var profilerData = ProfilerData.GetProfilerData(firstFrameIndex, lastFrameIndex, selectedPropertyPath);
             File.WriteAllText(filePath, profilerData.ToString());
             profilerData.Clear();
+        }
+
+        private int selectedStartFrame = ProfilerDriver.firstFrameIndex;
+        private int selectedEndFrame = ProfilerDriver.lastFrameIndex;
+        private bool useCustomFrameRange = false;
+
+        private void DrawFrameRangeSelector()
+        {
+            GUILayout.Label("Frame Range", EditorStyles.boldLabel);
+
+            useCustomFrameRange = EditorGUILayout.Toggle("Use Custom Frame Range", useCustomFrameRange);
+
+            if (useCustomFrameRange)
+            {
+                GUILayout.BeginHorizontal();
+
+                // 获取当前可用的帧范围
+                int firstFrame = ProfilerDriver.firstFrameIndex;
+                int lastFrame = ProfilerDriver.lastFrameIndex;
+
+                // 显示当前可用帧范围信息
+                EditorGUILayout.LabelField($"Available Range: {firstFrame+1} - {lastFrame+1}", EditorStyles.miniLabel);
+
+                GUILayout.EndHorizontal();
+
+                GUILayout.BeginHorizontal();
+
+                // 帧范围输入
+                EditorGUILayout.LabelField("Start Frame:", GUILayout.Width(80));
+                selectedStartFrame = EditorGUILayout.IntField(selectedStartFrame) - 1;
+                EditorGUILayout.LabelField("End Frame:", GUILayout.Width(70));
+                selectedEndFrame = EditorGUILayout.IntField(selectedEndFrame) - 1;
+
+                // 验证输入值
+                selectedStartFrame = Mathf.Clamp(selectedStartFrame, firstFrame, lastFrame);
+                selectedEndFrame = Mathf.Clamp(selectedEndFrame, selectedStartFrame, lastFrame);
+
+                GUILayout.EndHorizontal();
+            }
         }
     }
 
